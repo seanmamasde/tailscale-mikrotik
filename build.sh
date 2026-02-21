@@ -26,7 +26,9 @@
 # Set PLATFORM as required for your router model. See:
 # https://mikrotik.com/products/matrix
 #
-PLATFORM="linux/arm64"
+BASE_IMAGE="arm32v5/debian:bookworm-slim"
+GOARM_OVERRIDE=5
+PLATFORM="linux/arm/v5"
 TAILSCALE_VERSION=1.92.5
 VERSION=0.1.37
 
@@ -39,8 +41,8 @@ then
     git -c advice.detachedHead=false clone https://github.com/tailscale/tailscale.git --branch v$TAILSCALE_VERSION
 fi
 
-TS_USE_TOOLCHAIN="Y"
-cd tailscale && eval $(./build_dist.sh shellvars) && cd ..
+export TS_USE_TOOLCHAIN="Y"
+cd tailscale && eval "$(./build_dist.sh shellvars)" && cd ..
 
 docker buildx build \
   --no-cache \
@@ -48,8 +50,14 @@ docker buildx build \
   --build-arg VERSION_LONG=$VERSION_LONG \
   --build-arg VERSION_SHORT=$VERSION_SHORT \
   --build-arg VERSION_GIT_HASH=$VERSION_GIT_HASH \
+  --build-arg BASE_IMAGE=$BASE_IMAGE \
+  --build-arg GOARM_OVERRIDE=$GOARM_OVERRIDE \
   --platform $PLATFORM \
-  --builder arm64-builder \
   --load -t ghcr.io/fluent-networks/tailscale-mikrotik:$VERSION .
 
-skopeo copy docker-daemon:ghcr.io/fluent-networks/tailscale-mikrotik:$VERSION docker-archive:tailscale.tar
+if command -v skopeo >/dev/null 2>&1
+then
+  skopeo copy docker-daemon:ghcr.io/fluent-networks/tailscale-mikrotik:$VERSION docker-archive:tailscale.tar
+else
+  docker save -o tailscale.tar ghcr.io/fluent-networks/tailscale-mikrotik:$VERSION
+fi
