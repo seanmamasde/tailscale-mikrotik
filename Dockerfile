@@ -136,6 +136,8 @@ RUN set -eux; \
 # - mikrotik v5: arm32v5/debian:bookworm-slim  (linux/arm/v5)
 FROM ${BASE_IMAGE}
 
+LABEL org.opencontainers.image.source="https://github.com/seanmamasde/tailscale-mikrotik"
+
 COPY --from=rootfs /out/ /
 
 COPY --from=build-env /go/bin/* /usr/local/bin/
