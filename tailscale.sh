@@ -3,20 +3,20 @@
 # Use of this source code is governed by a BSD-style
 # license that can be found in the LICENSE file.
 
-set -m
-
 # Enable IP forwarding
 echo 'net.ipv4.ip_forward = 1' | tee -a /etc/sysctl.conf
 echo 'net.ipv6.conf.all.forwarding = 1' | tee -a /etc/sysctl.conf
 sysctl -p /etc/sysctl.conf
 
 # Prepare run dirs
-if [ ! -d "/var/run/sshd" ]; then
-  mkdir -p /var/run/sshd
-fi
+mkdir -p /run/sshd /var/run/sshd
+chown root:root /run /var/run /run/sshd /var/run/sshd 2>/dev/null || true
+chmod 0755 /run /var/run /run/sshd /var/run/sshd 2>/dev/null || true
 
 # Set root password
 echo "root:${PASSWORD}" | chpasswd
+
+/usr/sbin/sshd
 
 # Install routes
 IFS=',' read -ra SUBNETS <<< "${ADVERTISE_ROUTES}"
@@ -41,6 +41,7 @@ fi
 
 # Start tailscaled and bring tailscale up
 /usr/local/bin/tailscaled ${TAILSCALED_ARGS} &
+TAILSCALED_PID=$!
 until /usr/local/bin/tailscale up \
   --reset --authkey="${AUTH_KEY}" \
 	--login-server "${LOGIN_SERVER}" \
@@ -56,7 +57,4 @@ if [[ -n "${RUNNING_SCRIPT}" && -f "${RUNNING_SCRIPT}" ]]; then
        bash "${RUNNING_SCRIPT}" || exit $?
 fi
 
-# Start SSH
-/usr/sbin/sshd -D
-
-fg %1
+wait "$TAILSCALED_PID"

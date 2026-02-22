@@ -104,6 +104,7 @@ RUN set -eux; \
       iproute2:${ARCH} \
       openssh-server:${ARCH} \
       openssh-sftp-server:${ARCH} \
+      openssh-client:${ARCH} \
       curl:${ARCH} \
       jq:${ARCH} \
       procps:${ARCH}; \
@@ -112,6 +113,11 @@ RUN set -eux; \
         *_"${ARCH}".deb|*_all.deb) dpkg-deb -x "$deb" /out ;; \
       esac; \
     done; \
+    mkdir -p /out/etc; \
+    touch /out/etc/passwd /out/etc/group; \
+    grep -q '^sshd:' /out/etc/group || echo 'sshd:x:74:' >> /out/etc/group; \
+    grep -q '^sshd:' /out/etc/passwd || echo 'sshd:x:74:74::/run/sshd:/bin/false' >> /out/etc/passwd; \
+    mkdir -p /out/run/sshd; \
     for d in bin sbin lib lib64; do \
       if [ -d "/out/$d" ] && [ ! -L "/out/$d" ]; then \
         mkdir -p "/out/usr/$d"; \
