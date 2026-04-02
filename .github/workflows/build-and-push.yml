@@ -1,0 +1,93 @@
+name: Build and Push ARMv5 Image
+
+on:
+  push:
+    branches: [hap-ax-s]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  BASE_IMAGE: arm32v5/debian:bookworm-slim
+  GOARM_OVERRIDE: "5"
+  PLATFORM: linux/arm/v5
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read versions from build.sh
+        id: versions
+        run: |
+          TAILSCALE_VERSION=$(grep '^TAILSCALE_VERSION=' build.sh | cut -d= -f2)
+          VERSION=$(grep '^VERSION=' build.sh | cut -d= -f2)
+          echo "tailscale_version=$TAILSCALE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Clone Tailscale source
+        run: |
+          git -c advice.detachedHead=false clone \
+            https://github.com/tailscale/tailscale.git \
+            --branch "v${{ steps.versions.outputs.tailscale_version }}" \
+            --depth 1
+
+      - name: Get Tailscale version vars
+        id: ts_vars
+        run: |
+          cd tailscale
+          export TS_USE_TOOLCHAIN="Y"
+          eval "$(./build_dist.sh shellvars)"
+          echo "version_long=$VERSION_LONG" >> "$GITHUB_OUTPUT"
+          echo "version_short=$VERSION_SHORT" >> "$GITHUB_OUTPUT"
+          echo "version_git_hash=$VERSION_GIT_HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.CR_PAT }}
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ steps.versions.outputs.version }}
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: ${{ env.PLATFORM }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            TAILSCALE_VERSION=${{ steps.versions.outputs.tailscale_version }}
+            VERSION_LONG=${{ steps.ts_vars.outputs.version_long }}
+            VERSION_SHORT=${{ steps.ts_vars.outputs.version_short }}
+            VERSION_GIT_HASH=${{ steps.ts_vars.outputs.version_git_hash }}
+            BASE_IMAGE=${{ env.BASE_IMAGE }}
+            GOARM_OVERRIDE=${{ env.GOARM_OVERRIDE }}
+          provenance: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
