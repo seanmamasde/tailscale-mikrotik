@@ -24,7 +24,7 @@ ARG BUILDPLATFORM
 ARG TARGETPLATFORM
 ARG BASE_IMAGE="debian:bookworm-slim"
 
-FROM --platform=$BUILDPLATFORM golang:1.25-bookworm AS build-env
+FROM --platform=$BUILDPLATFORM golang:1.26-bookworm AS build-env
 
 WORKDIR /go/src/tailscale
 
